@@ -8,6 +8,58 @@ from operator import methodcaller
 from geopy.distance import vincenty
 import requests
 
+class ArrivingTrain:
+    """
+    A Train Arriving to a Station
+    """
+    def __init__(self,
+                 station,
+                 code,
+                 origin,
+                 destination,
+                 origin_time,
+                 destination_time,
+                 status,
+                 last_location,
+                 minutes_until_due,
+                 minutes_late,
+                 expected_arrival,
+                 expected_departure,
+                 scheduled_arrival,
+                 scheduled_departure,
+                 direction,
+                 train_type,
+                 location_type):
+        self.station = station
+        self.code = code
+        self.origin = origin
+        self.destination = destination
+        self.origin_time = origin_time
+        self.destination_time = destination_time
+        self.status = status
+        self.last_location = last_location
+        self.due_in_minutes = minutes_until_due
+        self.minutes_late = minutes_late
+        self.expected_arrival = expected_arrival
+        self.expected_departure = expected_departure
+        self.scheduled_arrival = scheduled_arrival
+        self.scheduled_departure = scheduled_departure
+        self.direction = direction
+        self.train_type = train_type
+        self.location_type = location_type
+
+    def message(self):
+        """
+        A message about the train's arrival status
+
+        """
+        return """
+        The {train.direction} {train.origin_time} {train.origin} to {train.destination} service is expected to arrive 
+        in {train.due_in_minutes} minutes at {train.expected_arrival}. It is {train.minutes_late} minutes late. 
+        The status is {train.status}.
+        """.format(train=self)
+
+
 class Station:
     """
     An Irish Rail Station
@@ -42,6 +94,47 @@ class Station:
 
         """
         return vincenty((self.latitude, self.longitude), (latitude, longitude)).km
+
+    def next_arrivals(self):
+        """
+        A list of the trains due to arrive at the station in the next 90 minutes.
+        Returns [ArrivingTrain]
+
+        """
+        query = "%s/getStationDataByNameXML?StationDesc=%s" % (self.API, self.description)
+        station_arrivals = requests.get(query)
+        tree = ElementTree.fromstring(station_arrivals.content)
+        arrivals = []
+        for child in tree:
+            arrivals.append(
+                ArrivingTrain(
+                    self,
+                    child.find(self.element_tag('Traincode')).text,
+                    child.find(self.element_tag('Origin')).text,
+                    child.find(self.element_tag('Destination')).text,
+                    child.find(self.element_tag('Origintime')).text,
+                    child.find(self.element_tag('Destinationtime')).text,
+                    child.find(self.element_tag('Status')).text,
+                    child.find(self.element_tag('Lastlocation')).text,
+                    child.find(self.element_tag('Duein')).text,
+                    child.find(self.element_tag('Late')).text,
+                    child.find(self.element_tag('Exparrival')).text,
+                    child.find(self.element_tag('Expdepart')).text,
+                    child.find(self.element_tag('Scharrival')).text,
+                    child.find(self.element_tag('Schdepart')).text,
+                    child.find(self.element_tag('Direction')).text,
+                    child.find(self.element_tag('Traintype')).text,
+                    child.find(self.element_tag('Locationtype')).text,
+                )
+            )
+        return arrivals
+
+    def element_tag(self, name):
+        """
+        Returns an element tag for given name
+
+        """
+        return "%s%s" % (self.TAG_PREFIX, name)
 
     @classmethod
     def all(cls):
