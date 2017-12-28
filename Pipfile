@@ -10,5 +10,7 @@ requests = "*"
 
 
 
+
 [dev-packages]
 ipython = "*"
+pylint = "*"
