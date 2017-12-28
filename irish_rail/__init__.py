@@ -54,8 +54,9 @@ class ArrivingTrain:
 
         """
         return """
-        The {train.direction} {train.origin_time} {train.origin} to {train.destination} service is expected to arrive 
-        in {train.due_in_minutes} minutes at {train.expected_arrival}. It is {train.minutes_late} minutes late. 
+        The {train.direction} {train.origin_time} {train.origin} to {train.destination} service
+        is expected to arrive at {train.station.description}
+        in {train.due_in_minutes} minutes at {train.expected_arrival}. It is {train.minutes_late} minutes late.
         The status is {train.status}.
         """.format(train=self)
 
