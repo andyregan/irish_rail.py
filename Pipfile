@@ -9,4 +9,6 @@ requests = "*"
 
 
 
+
 [dev-packages]
+ipython = "*"
