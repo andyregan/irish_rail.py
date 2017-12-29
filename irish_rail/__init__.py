@@ -48,6 +48,15 @@ class ArrivingTrain:
         self.train_type = train_type
         self.location_type = location_type
 
+    def __str__(self):
+        return self.code
+
+    def __repr__(self):
+        return "%s.%s(%s)" % (self.__class__.__module__,
+                              self.__class__.__qualname__,
+                              self.__dict__)
+
+    @property
     def message(self):
         """
         A message about the train's arrival status
@@ -87,7 +96,20 @@ class Station:
         return self.description
 
     def __repr__(self):
-        return "%s ID: %s, Description: %s" % (self.__class__, self.station_id, self.description)
+        return "%s.%s(%s)" % (self.__class__.__module__,
+                              self.__class__.__qualname__,
+                              self.__dict__)
+
+    @property
+    def next_arrivals(self):
+        """
+        A list of the trains due to arrive at the station in the next 90 minutes.
+        Returns [ArrivingTrain]
+
+        """
+        query = "%s/getStationDataByNameXML?StationDesc=%s" % (self.API, self.description)
+        result = requests.get(query)
+        return self.station_arrivals_from_query(result.content)
 
     def kilometers_from(self, latitude, longitude):
         """
@@ -96,46 +118,74 @@ class Station:
         """
         return vincenty((self.latitude, self.longitude), (latitude, longitude)).km
 
-    def next_arrivals(self):
+    def station_arrivals_from_query(self, query_result):
         """
-        A list of the trains due to arrive at the station in the next 90 minutes.
-        Returns [ArrivingTrain]
+        Returns a list of ArrivingTrain instances from query_result
 
         """
-        query = "%s/getStationDataByNameXML?StationDesc=%s" % (self.API, self.description)
-        station_arrivals = requests.get(query)
-        tree = ElementTree.fromstring(station_arrivals.content)
+        tree = ElementTree.fromstring(query_result)
         arrivals = []
         for child in tree:
             arrivals.append(
                 ArrivingTrain(
                     self,
-                    child.find(self.element_tag('Traincode')).text,
-                    child.find(self.element_tag('Origin')).text,
-                    child.find(self.element_tag('Destination')).text,
-                    child.find(self.element_tag('Origintime')).text,
-                    child.find(self.element_tag('Destinationtime')).text,
-                    child.find(self.element_tag('Status')).text,
-                    child.find(self.element_tag('Lastlocation')).text,
-                    child.find(self.element_tag('Duein')).text,
-                    child.find(self.element_tag('Late')).text,
-                    child.find(self.element_tag('Exparrival')).text,
-                    child.find(self.element_tag('Expdepart')).text,
-                    child.find(self.element_tag('Scharrival')).text,
-                    child.find(self.element_tag('Schdepart')).text,
-                    child.find(self.element_tag('Direction')).text,
-                    child.find(self.element_tag('Traintype')).text,
-                    child.find(self.element_tag('Locationtype')).text,
+                    self.child_text(child, 'Traincode'),
+                    self.child_text(child, 'Origin'),
+                    self.child_text(child, 'Destination'),
+                    self.child_text(child, 'Origintime'),
+                    self.child_text(child, 'Destinationtime'),
+                    self.child_text(child, 'Status'),
+                    self.child_text(child, 'Lastlocation'),
+                    self.child_text(child, 'Duein'),
+                    self.child_text(child, 'Late'),
+                    self.child_text(child, 'Exparrival'),
+                    self.child_text(child, 'Expdepart'),
+                    self.child_text(child, 'Scharrival'),
+                    self.child_text(child, 'Schdepart'),
+                    self.child_text(child, 'Direction'),
+                    self.child_text(child, 'Traintype'),
+                    self.child_text(child, 'Locationtype'),
                 )
             )
         return arrivals
 
-    def element_tag(self, name):
+    @classmethod
+    def child_text(cls, child, name):
+        """
+        Returns the text of the given ElementTree child
+
+        """
+        return child.find(cls.element_tag(name)).text
+
+    @classmethod
+    def element_tag(cls, name):
         """
         Returns an element tag for given name
 
         """
-        return "%s%s" % (self.TAG_PREFIX, name)
+        return "%s%s" % (cls.TAG_PREFIX, name)
+
+    @classmethod
+    def stations_from_query(cls, query_result):
+        """
+        Returns a list of Station instances from a
+        query result
+
+        """
+        stations = []
+        tree = ElementTree.fromstring(query_result)
+        for child in tree:
+            stations.append(
+                Station(
+                    cls.child_text(child, 'StationId'),
+                    cls.child_text(child, 'StationCode'),
+                    cls.child_text(child, 'StationAlias'),
+                    cls.child_text(child, 'StationDesc'),
+                    cls.child_text(child, 'StationLatitude'),
+                    cls.child_text(child, 'StationLongitude')
+                )
+            )
+        return stations
 
     @classmethod
     def all(cls):
@@ -144,21 +194,20 @@ class Station:
 
         """
         query = "%s/getAllStationsXML" % cls.API
-        all_stations = requests.get(query)
-        tree = ElementTree.fromstring(all_stations.content)
-        stations = []
-        for child in tree:
-            stations.append(
-                Station(
-                    child.find("%sStationId" % cls.TAG_PREFIX).text,
-                    child.find("%sStationCode" % cls.TAG_PREFIX).text,
-                    child.find("%sStationAlias" % cls.TAG_PREFIX).text,
-                    child.find("%sStationDesc" % cls.TAG_PREFIX).text,
-                    child.find("%sStationLatitude" % cls.TAG_PREFIX).text,
-                    child.find("%sStationLongitude" % cls.TAG_PREFIX).text
-                )
-            )
-        return stations
+        result = requests.get(query)
+        return cls.stations_from_query(result.content)
+
+    @classmethod
+    def by_name(cls, name):
+        """
+        Returns an instance of Station for given name
+
+        """
+        stations = [
+            station for station in cls.all()
+            if station.description.lower() == name.lower()
+        ]
+        return stations[0]
 
     @classmethod
     def closest_to(cls, latitude, longitude):
